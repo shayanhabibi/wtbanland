@@ -21,3 +21,7 @@ The aligned allocation procedures that were not exported from the nim library. H
 ## Tagptr
 
 I pretty consistently use algorithms that have aligned pointers which have flags/tags/indexes superimposed on them. This is a library just to make that easier for me to work with.
+
+## DumbPtrs
+
+You'd think theyre smart. But they're not. I've only fixed the sharedptrs atm.
