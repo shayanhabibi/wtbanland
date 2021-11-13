@@ -122,8 +122,10 @@ else:
   # Since MSVC does not implement C11, we fall back to MS intrinsics
   # where available.
 
+  import ./tagptr
+  
   type
-    Trivial = SomeNumber | bool | enum | ptr | pointer
+    Trivial = SomeNumber | bool | enum | ptr | pointer | TagPtr
       # A type that is known to be atomic and whose size is known at
       # compile time to be 8 bytes or less
 

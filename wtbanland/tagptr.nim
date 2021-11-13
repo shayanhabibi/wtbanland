@@ -15,7 +15,7 @@ type
 
 proc initContext*[T](align: static SomeInteger): TagPtrContext[T] {.compilerproc.} =
   ## Create a context for TagPtrs to use in extraction procedures
-  let flagMask = subShl align
+  let flagMask: uint = subShl align
   let ptrMask = high(uint) xor flagMask
   TagPtrContext[T](align: cast[uint](align), ptrMask: ptrMask, flagMask: flagMask)
 
