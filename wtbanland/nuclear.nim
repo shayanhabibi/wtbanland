@@ -92,12 +92,7 @@ type
   Nuclear*[T] = distinct ptr T
   
 template nuclear*(x: typed): untyped =
-  ## This is a short hand for emulating the type declaration of ptrs and refs;
-  ## with this you can type variables like so:
-  ## ```
-  ## var x: nuclear int
-  ## echo typeof(x) # Nuclear[int]
-  ## ```
+  ## This is a short hand for emulating the type declaration of ptrs and refs
   Nuclear[x]
 
 template cptr*[T](x: nuclear T): ptr T =
