@@ -56,3 +56,22 @@ block no_mem_copy:
 
   doAssert x[] == 1
   doAssert y[] == 6
+
+block volatile_shit:
+  type
+    TickTack = object
+      field1: int
+      field2: int
+  
+  let x = createShared(TickTack)
+  x[] = TickTack(field1: 1, field2: 2)
+  var y: nuclear TickTack
+  y = nuclear x
+  doAssert y[].field1 == 1
+  doAssert y[].field2 == 2
+
+  # y[].field1 = 5  # the volatile access is not mutable
+  
+  y[] = TickTack(field1: 5, field2: 2)
+
+  doAssert y[].field1 == 5

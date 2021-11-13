@@ -4,12 +4,41 @@
 ## ================
 ## 
 ## This library emulates the behaviour of volatile pointers without using
-## volatiles (as it can be a controversial tool to use); the behaviour of
-## volatile pointers is emulated using atomic stores and loads with a relaxed
-## memory order.
+## volatiles (where possible); the behaviour of volatile pointers is emulated
+## using atomic stores and loads with a relaxed memory order.
+## 
+## Volatiles are used if the object store/load is larger than 8 bytes. Ideally,
+## nuclear should be used to atomically alter the objects fields with a field
+## operator.
 
+template volatileLoad*[T](src: ptr T): T =
+  ## Generates a volatile load of the value stored in the container `src`.
+  ## Note that this only effects code generation on `C` like backends.
+  when nimvm:
+    src[]
+  else:
+    when defined(js):
+      src[]
+    else:
+      var res: T
+      {.emit: [res, " = (*(", typeof(src[]), " volatile*)", src, ");"].}
+      res
+
+template volatileStore*[T](dest: ptr T, val: T) =
+  ## Generates a volatile store into the container `dest` of the value
+  ## `val`. Note that this only effects code generation on `C` like
+  ## backends.
+  when nimvm:
+    dest[] = val
+  else:
+    when defined(js):
+      dest[] = val
+    else:
+      {.emit: ["*((", typeof(dest[]), " volatile*)(", dest, ")) = ", val, ";"].}
 
 # Just including the parts of atomics that I care about
+
+
 
 {.push, header: "<stdatomic.h>".}
 
@@ -71,6 +100,10 @@ template nuclear*(x: typed): untyped =
   ## ```
   Nuclear[x]
 
+template cptr*[T](x: nuclear T): ptr T =
+  ## Alias for casting back to ptr
+  cast[ptr T](x)
+
 proc nuclearAddr*[T](x: var T): nuclear T {.inline.} =
   ## Replicates the addr function, except it will return a `nuclear T`
   ## instead of a std `ptr T`
@@ -84,25 +117,42 @@ proc nucleate*[T](x: ptr T | pointer): nuclear T {.inline, deprecated: "use nucl
   Nuclear[T](x)
 
 proc `[]`*[T](nptr: nuclear T): T {.inline.} =
-  ## Dereference the pointer atomically
-  cast[T](
-    atomic_load_explicit[nonAtomicType(T), atomicType(T)](
-      cast[ptr atomicType(T)](cast[ptr T](nptr)), moRelaxed
+  ## Dereference the pointer atomically; only if T is less than 8 bytes
+  ## In the case that the object type T is larger than 8 bytes and exceeds
+  ## atomic assurances, we use volatile operations.
+
+  when sizeof(T) <= sizeof(int):
+    cast[T](
+      atomic_load_explicit[nonAtomicType(T), atomicType(T)](
+        cast[ptr atomicType(T)](cast[ptr T](nptr)), moRelaxed
+      )
     )
-  )
+  else:
+    volatileLoad(nptr.cptr())
 
 
 proc `[]=`*[T](x: nuclear T; y: T) {.inline.} =
-  ## Assign value `y` to the region pointed by the nuclear pointer atomically
-  atomic_store_explicit[nonAtomicType(T), atomicType(T)](
-    cast[ptr atomicType(T)](x), cast[nonAtomicType(uint)](y), moRelaxed
-    )
+  ## Assign value `y` to the region pointed by the nuclear pointer atomically.
+  ## In the case that the object type T is larger than 8 bytes and exceeds
+  ## atomic assurances, we use volatile operations.
+
+  when sizeof(T) <= sizeof(int):
+    atomic_store_explicit[nonAtomicType(T), atomicType(T)](
+      cast[ptr atomicType(T)](x), cast[nonAtomicType(uint)](y), moRelaxed
+      )
+  else:
+    volatileStore(x.cptr(), y)
 
 proc `<-`*[T](x, y: nuclear T) {.inline.} =
   ## Load the value in y atomically and store it in x atomically.
-  atomic_store_explicit[nonAtomicType(T), atomicType(T)](
-    cast[ptr atomicType(T)](x), y[], moRelaxed
-  )
+  ## In the case that the object type T is larger than 8 bytes and exceeds
+  ## atomic assurances, we use volatile operations.
+  when sizeof(T) <= sizeof(int):
+    atomic_store_explicit[nonAtomicType(T), atomicType(T)](
+      cast[ptr atomicType(T)](x), y[], moRelaxed
+    )
+  else:
+    volatileStore(x.cptr(), volatileLoad(y.cptr()))
 
 proc isNil*[T](x: nuclear T): bool {.inline.} =
   ## Alias for `ptr T` isNil procedure.
