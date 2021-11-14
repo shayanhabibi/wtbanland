@@ -75,3 +75,19 @@ block volatile_shit:
   y[] = TickTack(field1: 5, field2: 2)
 
   doAssert y[].field1 == 5
+
+block dot_operator:
+  type
+    TickTack = object
+      field1: int
+      field2: int
+  
+  let x = createShared(TickTack)
+  x[] = TickTack(field1: 1, field2: 2)
+  var y = nuclear x
+  doAssert y[].field1 == 1
+  doAssert y[].field2 == 2
+
+  y.field2[] = 5
+
+  doAssert y[].field2 == 5

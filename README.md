@@ -4,8 +4,7 @@ A repo of my utility libraries that aren't worth much; however, I find myself co
 
 ## Nuclear
 
-An emulation of volatile pointers using atomic operations with relaxed memory ordering.
-Only handles 8 byte structures. This is mostly for use in lock free algorithms.
+An emulation of volatile pointers using atomic operations with relaxed memory ordering. This is mostly for use in lock free algorithms.
 
 ```nim
 block asgn:
@@ -18,6 +17,30 @@ block asgn:
   doAssert x[] == 5
   doAssert y[] == 5
 ```
+
+### UPDATE
+
+Now enforces volatile access of object fields. ie: you can create a nuclear pointer to an object, and directly access the fields of that object with the same guarantees.
+
+```nim
+block dot_operator:
+  type
+    TickTack = object
+      field1: int
+      field2: int
+  
+  let x = createShared(TickTack)
+  x[] = TickTack(field1: 1, field2: 2)
+  var y = nuclear x
+  doAssert y[].field1 == 1
+  doAssert y[].field2 == 2
+
+  y.field2[] = 5
+
+  doAssert y[].field2 == 5
+```
+
+Better ergonomics to follow with time.
 
 ## Atomics
 

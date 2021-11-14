@@ -149,6 +149,61 @@ proc `<-`*[T](x, y: nuclear T) {.inline.} =
   else:
     volatileStore(x.cptr(), volatileLoad(y.cptr()))
 
+proc `!+`*[T](x: nuclear T, y: int): pointer {.inline.} =
+  cast[pointer](cast[int](x) + y)
+
 proc isNil*[T](x: nuclear T): bool {.inline.} =
   ## Alias for `ptr T` isNil procedure.
   cast[ptr T](x).isNil
+
+import std/macros
+
+{.experimental: "dotOperators".}
+
+macro `.`*[T](x: nuclear T, field: untyped): untyped =
+  var fieldType: NimNode
+  var offset: int
+  if kind(getTypeImpl(getTypeInst(x)[1])) != nnkObjectTy:
+    ## Raise an error; not sure how to do this shit though
+    result = nnkPragma.newTree:
+        ident"error".newColonExpr: newLit "This nuclear points to a type that is not an object; cannot do field access"
+    result[0].copyLineInfo(x)
+    return result
+  var recList = findChild(getTypeImpl(getTypeInst(x)[1]), it.kind == nnkRecList)
+  for index, n in recList:
+    case n.kind
+    of nnkIdentDefs:
+      if $field == $n[0]:
+        offset = getOffset(n[0])
+        for index, fieldNode in n[1..^1]:
+          case fieldNode.kind
+          of nnkIdent, nnkSym:
+            fieldType = fieldNode
+            break
+          else: discard
+    else: discard 
+  result = nnkStmtList.newTree(
+    nnkCast.newTree(
+      nnkBracketExpr.newTree(
+        newIdentNode("Nuclear"),
+        newIdentNode($fieldType)
+      ),
+      nnkInfix.newTree(
+        newIdentNode("!+"),
+        newIdentNode($x),
+        newLit(offset)
+      )
+    )
+  )
+
+# type
+#   Obj = object
+#     field1: int
+#     field2: int
+
+# # var y = createShared(Obj)
+# # y[] = Obj(field2: 5)
+# var y = createShared(int)
+# y[] = 5
+# var x = nuclear y
+# x.field2[] = 6
