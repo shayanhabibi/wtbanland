@@ -101,8 +101,12 @@ template cptr*[T](x: nuclear T): ptr T =
 
 proc nuclearAddr*[T](x: var T): nuclear T {.inline.} =
   ## Replicates the addr function, except it will return a `nuclear T`
-  ## instead of a std `ptr T`
+  ## instead of a std `ptr T`.
   Nuclear[T](addr x)
+
+proc nuclearUnsafeAddr*[T](x: T): nuclear T {.inline.} =
+  ## Replicates the unsafeAddr function, except it will return a `nuclear T`
+  Nuclear[T](unsafeAddr x)
 
 proc nuclear*[T](x: ptr T): nuclear T {.inline.} =
   ## Converts ptrs into nuclear pointers
@@ -138,6 +142,11 @@ proc `[]=`*[T](x: nuclear T; y: T) {.inline.} =
   else:
     volatileStore(x.cptr(), y)
 
+proc `<-`*[T](x: nuclear T; y: T) {.inline.} =
+  ## alias for `[]=`; this is just to neatify assignments with nuclear field
+  ## accesses
+  x[] = y
+
 proc `<-`*[T](x, y: nuclear T) {.inline.} =
   ## Load the value in y atomically and store it in x atomically.
   ## In the case that the object type T is larger than 8 bytes and exceeds
@@ -160,13 +169,17 @@ import std/macros
 
 {.experimental: "dotOperators".}
 
+# TODO - I just realised I have access to the object type from the get go
+# if I just reference T instead of going through the type instantiation yada yada.
+# Lord. Ah well. No harm; leave it as a chore.
+
 macro `.`*[T](x: nuclear T, field: untyped): untyped =
   ## Allows field access to nuclear pointers of object types. The access of
   ## those fields will also be nuclear in that they enforce atomic operations
   ## of a relaxed order.
 
-  var fieldType: NimNode
-  var offset: int
+  var fieldType: NimNode  # This will be the type of the field if found
+  var offset: int # This determines the offset of the field from the object start
   # var warning: NimNode
 
   template returnError(msg: string): untyped =
@@ -181,54 +194,58 @@ macro `.`*[T](x: nuclear T, field: untyped): untyped =
   #   warning[0].copyLineInfo(x)
 
   template checkNuclearType: untyped =
-    case kind(getTypeImpl(getTypeInst(x)[1]))
-    of nnkObjectTy: discard
+    # We will make sure that the type of T is something we can access fields of
+    # and support
+    case kind(getTypeImpl(getTypeInst(x)[1])) # gets the type of T
+    of nnkObjectTy: discard # It's an object, all is good; we can continue
     # of nnkTupleTy: warnUser "Nuclear access for tuples is not yet tested"
-    of nnkTupleTy:
+    of nnkTupleTy:  # It's a tuple, it might be fine; we can continue for now
       {.warning: "Nuclear access for tuples is not yet tested".}
       discard
-    of nnkRefTy:
+    of nnkRefTy:  # It's a ref object; this might behave a certain way and needs consideration first.
       returnError "Nuclear field access for nuclears pointing to ref objects is not yet supported"
-    else:
+    else: # It's not a supported type; throw an error
       returnError "This nuclear points to a type that is not an object; cannot do field access"
   
   checkNuclearType()
 
+  # Get the field list of T
   var recList = findChild(getTypeImpl(getTypeInst(x)[1]), it.kind == nnkRecList)
+  # Iterate over the field list identifiers
   for index, n in recList:
     case n.kind
     of nnkIdentDefs:
+      # We've found the correct field when the first child node of the
+      # identifier matches what was given
       if $field == $n[0]:
+        # Get the offset of the field
         offset = getOffset(n[0])
+        # Iterate over the remaining child nodes to find the identifier
+        # of the type
         for index, fieldNode in n[1..^1]:
           case fieldNode.kind
           of nnkIdent, nnkSym:
+            # We will save the type and break the loop
             fieldType = fieldNode
             break
           else: discard
     else: discard 
+  # Now we'll make our new AST
   result = nnkStmtList.newTree(
-    nnkCast.newTree(
+    nnkCast.newTree(  # We want to cast pointer arithmetic into a nuclear
       nnkBracketExpr.newTree(
         newIdentNode("Nuclear"),
-        newIdentNode($fieldType)
+        newIdentNode($fieldType) # the nuclear T will be the fieldType of the field
       ),
       nnkInfix.newTree(
-        newIdentNode("!+"),
-        newIdentNode($x),
-        newLit(offset)
+        newIdentNode("!+"), # use our pointer arithmetic proc
+        newIdentNode($x), # on our nuclear
+        newLit(offset)  # by the offset of the field
       )
     )
   )
-
-# type
-#   Obj = object
-#     field1: int
-#     field2: int
-
-# # var y = createShared(Obj)
-# # y[] = Obj(field2: 5)
-# var y = createShared(int)
-# y[] = 5
-# var x = nuclear y
-# x.field2[] = 6
+  # We have now generated a statement that is a nuclear pointer to the
+  # field memory region of the object with its type of the field type.
+  # Normal nuclear operations will therefore apply atomic operations
+  # to that field specifically:
+  # `cast[Nuclear[fieldType]](x !+ offset)`
