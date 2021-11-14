@@ -164,14 +164,36 @@ macro `.`*[T](x: nuclear T, field: untyped): untyped =
   ## Allows field access to nuclear pointers of object types. The access of
   ## those fields will also be nuclear in that they enforce atomic operations
   ## of a relaxed order.
+
   var fieldType: NimNode
   var offset: int
-  if kind(getTypeImpl(getTypeInst(x)[1])) != nnkObjectTy:
-    # Raise an error; not sure how to do this shit though
+  # var warning: NimNode
+
+  template returnError(msg: string): untyped =
     result = nnkPragma.newTree:
-        ident"error".newColonExpr: newLit "This nuclear points to a type that is not an object; cannot do field access"
+      ident"error".newColonExpr: newLit(msg)
     result[0].copyLineInfo(x)
     return result
+
+  # template warnUser(msg: string): untyped =
+  #   warning = nnkPragma.newTree:
+  #     ident"warning".newColonExpr: newLit(msg)
+  #   warning[0].copyLineInfo(x)
+
+  template checkNuclearType: untyped =
+    case kind(getTypeImpl(getTypeInst(x)[1]))
+    of nnkObjectTy: discard
+    # of nnkTupleTy: warnUser "Nuclear access for tuples is not yet tested"
+    of nnkTupleTy:
+      {.warning: "Nuclear access for tuples is not yet tested".}
+      discard
+    of nnkRefTy:
+      returnError "Nuclear field access for nuclears pointing to ref objects is not yet supported"
+    else:
+      returnError "This nuclear points to a type that is not an object; cannot do field access"
+  
+  checkNuclearType()
+
   var recList = findChild(getTypeImpl(getTypeInst(x)[1]), it.kind == nnkRecList)
   for index, n in recList:
     case n.kind
