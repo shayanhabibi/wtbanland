@@ -15,8 +15,8 @@ block no_mem_copy:
   let y = createShared(int)
 
   var z, w: nuclear int
-  z = nucleate x
-  w = nucleate y
+  z = nuclear x
+  w = nuclear y
 
   z[] = 1
   w[] = 2
@@ -39,7 +39,7 @@ block no_mem_copy:
   doAssert w[] == 5
   doAssert z[] == 5
 
-  w = nucleate x
+  w = nuclear x
 
   doAssert z[] == 5
   doAssert w[] == 6

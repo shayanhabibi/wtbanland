@@ -161,10 +161,13 @@ import std/macros
 {.experimental: "dotOperators".}
 
 macro `.`*[T](x: nuclear T, field: untyped): untyped =
+  ## Allows field access to nuclear pointers of object types. The access of
+  ## those fields will also be nuclear in that they enforce atomic operations
+  ## of a relaxed order.
   var fieldType: NimNode
   var offset: int
   if kind(getTypeImpl(getTypeInst(x)[1])) != nnkObjectTy:
-    ## Raise an error; not sure how to do this shit though
+    # Raise an error; not sure how to do this shit though
     result = nnkPragma.newTree:
         ident"error".newColonExpr: newLit "This nuclear points to a type that is not an object; cannot do field access"
     result[0].copyLineInfo(x)
