@@ -9,8 +9,9 @@ proc wakeByAddressAll(address: pointer) {.stdcall, dynlib: "API-MS-Win-Core-Sync
 proc wait*[T](monitor: ptr T; compare: T) {.inline.} =
   # win api says this can spuriously wake and should be in a loop which does
   # a comparison to ensure it is appropriate for the thread to wake up
-  while monitor[] == compare:
-    discard waitOnAddress(monitor, compare.unsafeAddr, sizeof(T).int32, INFINITE)
+  # while monitor[] == compare:
+    # discard waitOnAddress(monitor, compare.unsafeAddr, sizeof(T).int32, INFINITE)
+  discard waitOnAddress(monitor, compare.unsafeAddr, sizeof(T).int32, INFINITE)
 
 proc wake*(monitor: pointer) {.inline.} =
   wakeByAddressSingle(monitor)
